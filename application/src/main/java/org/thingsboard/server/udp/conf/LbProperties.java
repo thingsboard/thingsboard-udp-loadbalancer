@@ -18,6 +18,7 @@ package org.thingsboard.server.udp.conf;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 
 import java.util.List;
 
@@ -26,9 +27,7 @@ import java.util.List;
 @ConfigurationProperties(prefix = "lb")
 public class LbProperties {
 
+    @Lazy
     ResolverProperties resolver;
     List<LbUpstreamProperties> upstreams;
-
-
-
 }

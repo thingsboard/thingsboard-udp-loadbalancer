@@ -16,33 +16,42 @@
 package org.thingsboard.server.udp.service.resolve;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.thingsboard.server.udp.conf.LbProperties;
 import org.thingsboard.server.udp.service.context.LbContext;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @RequiredArgsConstructor
 public abstract class AbstractResolver implements Resolver {
 
     private final LbContext context;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final Map<String, List<InetAddress>> dnsMap = new ConcurrentHashMap<>();
+    private final LbProperties lbProperties;
 
     @Value("${lb.resolver.validity-time:60}")
     private int dnsRecordValidityTimeInSeconds;
 
     @PostConstruct
     public void init() {
+        lbProperties.getUpstreams().forEach(p -> {
+            try {
+                resolve(p.getTargetAddress());
+            } catch (UnknownHostException e) {
+                log.warn("Failed resolve target address [{}]!", p.getTargetAddress(), e);
+            }
+        });
         context.getScheduler().scheduleWithFixedDelay(this::checkDnsUpdates, dnsRecordValidityTimeInSeconds, dnsRecordValidityTimeInSeconds, TimeUnit.SECONDS);
     }
 
