@@ -18,7 +18,6 @@ package org.thingsboard.server.udp.service.resolve;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
-import org.thingsboard.server.udp.conf.LbProperties;
 import org.thingsboard.server.udp.service.context.LbContext;
 
 import java.net.InetAddress;
@@ -30,8 +29,8 @@ import java.util.List;
 @ConditionalOnProperty(prefix = "lb.resolver", value = "type", havingValue = "default", matchIfMissing = true)
 public class DefaultResolver extends AbstractResolver {
 
-    public DefaultResolver(LbContext context, ApplicationEventPublisher applicationEventPublisher, LbProperties lbProperties) {
-        super(context, applicationEventPublisher, lbProperties);
+    public DefaultResolver(LbContext context, ApplicationEventPublisher applicationEventPublisher) {
+        super(context, applicationEventPublisher);
     }
 
     @Override

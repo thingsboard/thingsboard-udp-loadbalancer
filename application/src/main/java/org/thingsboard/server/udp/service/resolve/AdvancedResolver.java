@@ -21,21 +21,19 @@ import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.resolver.dns.DnsNameResolver;
 import io.netty.resolver.dns.DnsNameResolverBuilder;
 import io.netty.resolver.dns.DnsServerAddressStreamProvider;
-import io.netty.resolver.dns.MultiDnsServerAddressStreamProvider;
-import io.netty.resolver.dns.SingletonDnsServerAddressStreamProvider;
-import lombok.SneakyThrows;
+import io.netty.resolver.dns.SequentialDnsServerAddressStreamProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
-import org.thingsboard.server.udp.conf.LbProperties;
 import org.thingsboard.server.udp.service.context.LbContext;
 
 import javax.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 @ConditionalOnExpression("'${lb.resolver.type:null}'=='advanced'")
@@ -46,8 +44,8 @@ public class AdvancedResolver extends AbstractResolver {
     private DnsNameResolver dnsResolver;
     private EventLoopGroup eventLoopGroup;
 
-    public AdvancedResolver(LbContext context, ApplicationEventPublisher applicationEventPublisher, LbProperties lbProperties) {
-        super(context, applicationEventPublisher, lbProperties);
+    public AdvancedResolver(LbContext context, ApplicationEventPublisher applicationEventPublisher) {
+        super(context, applicationEventPublisher);
         this.eventLoopGroup = new NioEventLoopGroup(1);
     }
 
@@ -56,19 +54,10 @@ public class AdvancedResolver extends AbstractResolver {
         DnsNameResolverBuilder builder = new DnsNameResolverBuilder(eventLoopGroup.next());
         builder.channelType(NioDatagramChannel.class);
 
-        String[] serversArray = servers.split(",");
+        DnsServerAddressStreamProvider provider =
+                new SequentialDnsServerAddressStreamProvider(Arrays.stream(servers.split(",")).map(this::createSocketAddress).collect(Collectors.toList()));
 
-        if (serversArray.length > 1) {
-            DnsServerAddressStreamProvider[] providers = new DnsServerAddressStreamProvider[serversArray.length];
-            for (int i = 0; i < serversArray.length; i++) {
-                providers[i] = new SingletonDnsServerAddressStreamProvider(createSocketAddress(serversArray[i]));
-            }
-
-            builder.nameServerProvider(new MultiDnsServerAddressStreamProvider(providers));
-        } else {
-            builder.nameServerProvider(new SingletonDnsServerAddressStreamProvider(createSocketAddress(serversArray[0])));
-        }
-
+        builder.nameServerProvider(provider);
         dnsResolver = builder.build();
         super.init();
     }
@@ -78,9 +67,8 @@ public class AdvancedResolver extends AbstractResolver {
         return new InetSocketAddress(hostPort[0], Integer.parseInt(hostPort[1]));
     }
 
-    @SneakyThrows
     @Override
-    public List<InetAddress> doResolve(String targetAddress) throws UnknownHostException {
+    public List<InetAddress> doResolve(String targetAddress) throws Exception {
         return dnsResolver.resolveAll(targetAddress).get();
     }
 
