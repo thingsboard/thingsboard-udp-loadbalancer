@@ -16,6 +16,7 @@
 package org.thingsboard.server.udp.service.resolve;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.thingsboard.server.udp.service.context.LbContext;
@@ -24,13 +25,12 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @RequiredArgsConstructor
 public abstract class AbstractResolver implements Resolver {
 
@@ -56,7 +56,7 @@ public abstract class AbstractResolver implements Resolver {
     }
 
     @Override
-    public List<InetAddress> resolve(String targetAddress) throws UnknownHostException {
+    public List<InetAddress> resolve(String targetAddress) throws Exception {
         List<InetAddress> addresses = dnsMap.get(targetAddress);
         if (addresses == null) {
             addresses = doResolve(targetAddress);
@@ -65,5 +65,5 @@ public abstract class AbstractResolver implements Resolver {
         return addresses;
     }
 
-    public abstract List<InetAddress> doResolve(String targetAddress) throws UnknownHostException;
+    public abstract List<InetAddress> doResolve(String targetAddress) throws Exception;
 }

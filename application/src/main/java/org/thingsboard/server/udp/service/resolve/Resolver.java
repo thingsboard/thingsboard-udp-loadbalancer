@@ -16,11 +16,10 @@
 package org.thingsboard.server.udp.service.resolve;
 
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.List;
 
 public interface Resolver {
 
-    List<InetAddress> resolve(String targetAddress) throws UnknownHostException;
+    List<InetAddress> resolve(String targetAddress) throws Exception;
 
 }

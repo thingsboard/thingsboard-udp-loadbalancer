@@ -15,7 +15,7 @@
  */
 package org.thingsboard.server.udp.service.resolve;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.thingsboard.server.udp.service.context.LbContext;
@@ -26,7 +26,7 @@ import java.util.Arrays;
 import java.util.List;
 
 @Component
-@ConditionalOnExpression("'${lb.resolver.type:default}'=='default'")
+@ConditionalOnProperty(prefix = "lb.resolver", value = "type", havingValue = "default", matchIfMissing = true)
 public class DefaultResolver extends AbstractResolver {
 
     public DefaultResolver(LbContext context, ApplicationEventPublisher applicationEventPublisher) {

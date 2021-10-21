@@ -30,7 +30,6 @@ import org.thingsboard.server.udp.conf.LbProperties;
 import org.thingsboard.server.udp.conf.LbUpstreamProperties;
 import org.thingsboard.server.udp.service.context.DefaultUpstreamContext;
 import org.thingsboard.server.udp.service.context.LbContext;
-import org.thingsboard.server.udp.service.resolve.DefaultResolver;
 import org.thingsboard.server.udp.service.resolve.Resolver;
 import org.thingsboard.server.udp.service.strategy.RoundRobinLbStrategy;
 
@@ -88,6 +87,14 @@ public class BootstrapService {
             ctx.setServerChannel(serverChannel);
             upstreams.put(upstreamProperties.getName(), ctx);
         }
+
+        properties.getUpstreams().forEach(p -> {
+            try {
+                resolver.resolve(p.getTargetAddress());
+            } catch (Exception e) {
+                log.warn("Failed resolve target address [{}]!", p.getTargetAddress(), e);
+            }
+        });
 
         log.info("ThingsBoard UDP Load Balancer Service started!");
     }
