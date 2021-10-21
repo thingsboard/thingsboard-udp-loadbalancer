@@ -21,14 +21,18 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.thingsboard.server.udp.conf.LbProperties;
 import org.thingsboard.server.udp.conf.LbUpstreamProperties;
+import org.thingsboard.server.udp.service.context.DefaultUpstreamContext;
+import org.thingsboard.server.udp.service.context.LbContext;
+import org.thingsboard.server.udp.service.resolve.DefaultResolver;
+import org.thingsboard.server.udp.service.resolve.Resolver;
+import org.thingsboard.server.udp.service.strategy.RoundRobinLbStrategy;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -36,17 +40,20 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-@Service("ThingsboardK8sDnsService")
+@Service
 @Slf4j
-public class TbLbBootstrapService {
+@RequiredArgsConstructor
+public class BootstrapService {
 
-    @Autowired
-    private LbProperties properties;
-    @Value("${lb.netty.worker_group_thread_count}")
-    private Integer workerGroupThreadCount;
+    private final LbContext context;
+    private final LbProperties properties;
+    private final Resolver resolver;
+    private final Map<String, DefaultUpstreamContext> upstreams = new ConcurrentHashMap<>();
+
+    @Value("${lb.netty.worker_group_thread_count:4}")
+    private int workerGroupThreadCount;
 
     private EventLoopGroup workerGroup;
-    private Map<String, UpstreamContext> upstreams = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() throws Exception {
@@ -55,7 +62,7 @@ public class TbLbBootstrapService {
 
         int upstreamSize = properties.getUpstreams().size();
         int uniqueUpstreamSize = properties.getUpstreams().stream().map(LbUpstreamProperties::getName).collect(Collectors.toSet()).size();
-        if (upstreamSize < 0) {
+        if (upstreamSize == 0) {
             log.error("No upstream servers configured!");
             System.exit(-1);
         } else if (upstreamSize != uniqueUpstreamSize) {
@@ -64,17 +71,17 @@ public class TbLbBootstrapService {
         }
 
         for (LbUpstreamProperties upstreamProperties : properties.getUpstreams()) {
-            final UpstreamContext ctx = new UpstreamContext(upstreamProperties);
+            final DefaultUpstreamContext ctx = new DefaultUpstreamContext(upstreamProperties, resolver, new RoundRobinLbStrategy());
+            ctx.init(workerGroup, context.getScheduler());
             Bootstrap b = new Bootstrap();
             b.group(workerGroup)
                     .channel(NioDatagramChannel.class)
                     .handler(new ChannelInitializer<NioDatagramChannel>() {
                         @Override
-                        protected void initChannel(NioDatagramChannel nioDatagramChannel) throws Exception {
-//                            nioDatagramChannel.pipeline().addLast(new UdpMessageHandler(ctx));
+                        protected void initChannel(NioDatagramChannel nioDatagramChannel) {
+                            nioDatagramChannel.pipeline().addLast(new UdpClientLbHandler(ctx));
                         }
-                    }).option(ChannelOption.SO_BROADCAST, true)
-                    .option(ChannelOption.SO_KEEPALIVE, true);
+                    }).option(ChannelOption.SO_BROADCAST, true);
 
             Channel serverChannel = b.bind(upstreamProperties.getBindAddress(), upstreamProperties.getBindPort())
                     .sync().channel();
@@ -89,7 +96,7 @@ public class TbLbBootstrapService {
     public void shutdown() throws InterruptedException {
         log.info("Stopping ThingsBoard UDP Load Balancer Service Service!");
         try {
-            for (UpstreamContext ctx : upstreams.values()) {
+            for (DefaultUpstreamContext ctx : upstreams.values()) {
                 ctx.getServerChannel().close().sync();
             }
         } finally {

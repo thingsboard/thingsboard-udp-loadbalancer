@@ -25,7 +25,7 @@
         </encoder>
     </appender>
 
-    <logger name="org.thingsboard.server.udp" level="INFO" />
+    <logger name="org.thingsboard.server.udp" level="TRACE" />
 
     <root level="INFO">
         <appender-ref ref="STDOUT"/>

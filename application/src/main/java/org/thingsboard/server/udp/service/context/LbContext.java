@@ -13,16 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.thingsboard.server.udp.service;
+package org.thingsboard.server.udp.service.context;
 
-import io.netty.channel.Channel;
-import lombok.Data;
-import org.thingsboard.server.udp.conf.LbUpstreamProperties;
+import java.util.concurrent.ScheduledExecutorService;
 
-@Data
-public class UpstreamContext {
+public interface LbContext {
 
-    private final LbUpstreamProperties conf;
-    private Channel serverChannel;
+    ScheduledExecutorService getScheduler();
 
 }
