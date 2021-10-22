@@ -42,7 +42,7 @@ public class AdvancedResolver extends AbstractResolver {
     @Value("${lb.resolver.servers:60}")
     private String servers;
     private DnsNameResolver dnsResolver;
-    private EventLoopGroup eventLoopGroup;
+    private final EventLoopGroup eventLoopGroup;
 
     public AdvancedResolver(LbContext context, ApplicationEventPublisher applicationEventPublisher) {
         super(context, applicationEventPublisher);

@@ -15,14 +15,18 @@
  */
 package org.thingsboard.server.udp.service.context;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import io.netty.channel.socket.DatagramPacket;
 import org.thingsboard.server.udp.service.ProxyChannel;
 
 import java.net.InetSocketAddress;
+import java.util.concurrent.ExecutorService;
 
 public interface UpstreamContext {
 
-    ProxyChannel getOrCreateTargetChannel(InetSocketAddress client) throws Exception;
+    ListenableFuture<ProxyChannel> getOrCreateTargetChannel(InetSocketAddress client) throws Exception;
 
     void processReply(DatagramPacket packet);
+
+    ExecutorService getExecutor();
 }

@@ -15,10 +15,13 @@
  */
 package org.thingsboard.server.udp.service.context;
 
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 
 public interface LbContext {
 
     ScheduledExecutorService getScheduler();
+
+    ExecutorService getExecutor();
 
 }

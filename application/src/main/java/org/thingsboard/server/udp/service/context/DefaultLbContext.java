@@ -17,27 +17,39 @@ package org.thingsboard.server.udp.service.context;
 
 import lombok.Getter;
 import org.springframework.stereotype.Component;
+import org.thingsboard.server.udp.util.ThingsBoardThreadFactory;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class DefaultLbContext implements LbContext {
 
     @Getter
     private ScheduledExecutorService scheduler;
+    @Getter
+    private ExecutorService executor;
+
 
     @PostConstruct
     public void init() {
-        scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler = Executors.newSingleThreadScheduledExecutor(ThingsBoardThreadFactory.forName("lb-scheduler"));
+        executor =  new ThreadPoolExecutor(1, Runtime.getRuntime().availableProcessors(), 60L, TimeUnit.SECONDS, new SynchronousQueue(), ThingsBoardThreadFactory.forName("lb-executor"));
     }
 
     @PreDestroy
     public void stop() {
         if (scheduler != null) {
             scheduler.shutdownNow();
+        }
+        if (executor != null) {
+            executor.shutdownNow();
         }
     }
 

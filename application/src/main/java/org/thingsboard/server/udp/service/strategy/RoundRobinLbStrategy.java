@@ -33,7 +33,7 @@ public class RoundRobinLbStrategy implements LbStrategy {
     @Override
     public InetAddress get(DefaultUpstreamContext ctx, List<InetAddress> targets, InetSocketAddress source) {
         if (targets.isEmpty()) {
-            throw new IllegalArgumentException("List of target servers is empty!");
+            return null;
         } else {
             var size = targets.size();
             if (size == 1) {

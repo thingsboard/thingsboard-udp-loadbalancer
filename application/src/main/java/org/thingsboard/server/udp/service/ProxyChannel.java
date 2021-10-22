@@ -27,17 +27,29 @@ import java.net.InetSocketAddress;
 @Data
 public class ProxyChannel {
 
-    final Channel serverChannel;
-    final Channel proxyChannel;
-    final InetSocketAddress client;
-    final InetSocketAddress target;
+    private final Channel clientChannel;
+    private Channel targetChannel;
+    private final InetSocketAddress client;
+    private InetSocketAddress target;
+    private final int proxyPort;
+    private volatile long lastActivityTime;
+
+    public ProxyChannel(Channel clientChannel, Channel targetChannel, InetSocketAddress client, InetSocketAddress target, int proxyPort) {
+        this.clientChannel = clientChannel;
+        this.targetChannel = targetChannel;
+        this.client = client;
+        this.target = target;
+        this.proxyPort = proxyPort;
+    }
 
     public void toTarget(DatagramPacket packet) {
-        send(client, target, proxyChannel, packet.content());
+        send(client, target, targetChannel, packet.content());
+        lastActivityTime = System.currentTimeMillis();
     }
 
     public void toClient(DatagramPacket packet) {
-        send(target, client, serverChannel, packet.content());
+        send(target, client, clientChannel, packet.content());
+        lastActivityTime = System.currentTimeMillis();
     }
 
     private static void send(InetSocketAddress client, InetSocketAddress target, Channel channel, ByteBuf data) {
@@ -46,5 +58,10 @@ public class ProxyChannel {
         log.trace("[{}]->[{}] Write {} bytes", client, target, targetPacket.content().readableBytes());
         //TODO: optimize to flush periodically or if buffered to much data. Maybe channelWritabilityChanged?
         channel.writeAndFlush(targetPacket);
+    }
+
+    @Override
+    public String toString() {
+        return "[" + client + "][" + target + "][" + proxyPort + "][" + lastActivityTime + "][" + client + "][" + target + "]";
     }
 }

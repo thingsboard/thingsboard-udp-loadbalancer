@@ -23,5 +23,7 @@ public class LbUpstreamConnectionProperties {
     private int max;
     private int perIpLimit;
     private int timeout;
+    private int invalidateFrequency;
+    private int logFrequency;
 
 }
