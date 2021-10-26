@@ -23,8 +23,8 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -40,7 +40,9 @@ public class DefaultLbContext implements LbContext {
     @PostConstruct
     public void init() {
         scheduler = Executors.newSingleThreadScheduledExecutor(ThingsBoardThreadFactory.forName("lb-scheduler"));
-        executor =  new ThreadPoolExecutor(1, Runtime.getRuntime().availableProcessors(), 60L, TimeUnit.SECONDS, new SynchronousQueue(), ThingsBoardThreadFactory.forName("lb-executor"));
+        int coreSize = Runtime.getRuntime().availableProcessors();
+        executor =  new ThreadPoolExecutor(coreSize, coreSize, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), ThingsBoardThreadFactory.forName("lb-executor"));
+        ((ThreadPoolExecutor)executor).allowCoreThreadTimeOut(true);
     }
 
     @PreDestroy
