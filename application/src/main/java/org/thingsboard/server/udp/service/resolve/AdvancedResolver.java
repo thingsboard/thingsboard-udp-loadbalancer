@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 @ConditionalOnExpression("'${lb.resolver.type:null}'=='advanced'")
 public class AdvancedResolver extends AbstractResolver {
 
-    @Value("${lb.resolver.servers:60}")
+    @Value("${lb.resolver.servers:8.8.8.8:53}")
     private String servers;
     private DnsNameResolver dnsResolver;
     private final EventLoopGroup eventLoopGroup;
@@ -56,8 +56,8 @@ public class AdvancedResolver extends AbstractResolver {
 
         DnsServerAddressStreamProvider provider =
                 new SequentialDnsServerAddressStreamProvider(Arrays.stream(servers.split(",")).map(this::createSocketAddress).collect(Collectors.toList()));
-
         builder.nameServerProvider(provider);
+        builder.ttl(dnsRecordValidityTimeInSeconds, dnsRecordValidityTimeInSeconds);
         dnsResolver = builder.build();
         super.init();
     }

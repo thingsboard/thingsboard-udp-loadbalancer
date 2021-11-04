@@ -44,7 +44,7 @@ public abstract class AbstractResolver implements Resolver {
     private ScheduledFuture<?> dnsUpdatesFuture;
 
     @Value("${lb.resolver.validity-time:60}")
-    private int dnsRecordValidityTimeInSeconds;
+    protected int dnsRecordValidityTimeInSeconds;
 
     @PostConstruct
     public void init() {
