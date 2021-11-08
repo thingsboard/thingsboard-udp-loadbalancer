@@ -35,6 +35,10 @@ lb:
     validity-time: "${LB_RESOLVER_VALIDITY:60}"
     # List of dns servers to be used by advanced resolver
     servers: "${LB_RESOLVER_SERVERS:8.8.8.8:53}"
+  sessions:
+    persist: "${LB_SESSIONS_PERSIST:true}"
+    persisting_interval: "${LB_SESSIONS_PERSISTING_INTERVAL:60}"
+    file-path: "${LB_SESSIONS_FILE_PATH:./sessions}"
   upstreams:
     - name: "${LB_UPSTREAM_NAME:CoAP}"
       bind-address: "${LB_UPSTREAM_BIND_ADDRESS:0.0.0.0}"

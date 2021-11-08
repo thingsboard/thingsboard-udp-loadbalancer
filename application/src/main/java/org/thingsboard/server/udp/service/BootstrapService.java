@@ -38,8 +38,21 @@ import org.thingsboard.server.udp.service.strategy.RoundRobinLbStrategy;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -57,6 +70,12 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
     @Value("${lb.netty.leak_detection_lvl:SIMPLE}")
     private String leakDetectionLevel;
 
+    @Value("${lb.sessions.persist:true}")
+    private boolean persist;
+    @Value("${lb.sessions.persisting_interval:600}")
+    private long persistingInterval;
+    @Value("${lb.sessions.file-path:./sessions}")
+    private String filePath;
 
     private EventLoopGroup workerGroup;
 
@@ -84,6 +103,8 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
             }
         });
 
+        Map<String, Map<InetSocketAddress, Integer>> fetchedDnsSessions = fetchDnsSessions();
+
         for (LbUpstreamProperties upstreamProperties : properties.getUpstreams()) {
             final DefaultUpstreamContext ctx = new DefaultUpstreamContext(upstreamProperties, resolver, new RoundRobinLbStrategy());
             ctx.init(workerGroup, context);
@@ -101,6 +122,20 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
                     .sync().channel();
             ctx.setClientChannel(serverChannel);
             upstreams.put(upstreamProperties.getName(), ctx);
+            Map<InetSocketAddress, Integer> clients = fetchedDnsSessions.get(upstreamProperties.getName());
+            if (clients != null) {
+                clients.forEach(ctx::getOrCreateTargetChannel);
+            }
+        }
+
+        if (persist) {
+            context.getScheduler().scheduleWithFixedDelay(() -> {
+                try {
+                    persistDnsSessions();
+                } catch (IOException e) {
+                    log.error("Failed to persist DNS sessions!", e);
+                }
+            }, persistingInterval, persistingInterval, TimeUnit.SECONDS);
         }
 
         log.info("ThingsBoard UDP Load Balancer Service started!");
@@ -124,5 +159,51 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
         for (DefaultUpstreamContext ctx : upstreams.values()) {
             ctx.onDnsUpdate(dnsUpdateEvent);
         }
+    }
+
+    private void persistDnsSessions() throws IOException {
+        Map<String, Map<InetSocketAddress, Integer>> dnsSessions = new HashMap<>();
+        upstreams.forEach((name, upstream) -> {
+            Map<InetSocketAddress, Integer> clients = new HashMap<>();
+            upstream.getProxyPortMap().forEach((port, proxyChanel) -> clients.put(proxyChanel.getClient(), port));
+            dnsSessions.put(name, clients);
+        });
+
+        String tmpFilePathStr = filePath + ".tmp";
+        Path tmpFilePath = Paths.get(tmpFilePathStr);
+
+        Files.createFile(tmpFilePath);
+
+        try (FileOutputStream fos = new FileOutputStream(tmpFilePathStr)) {
+            try (ObjectOutputStream oos = new ObjectOutputStream(fos)) {
+                oos.writeObject(dnsSessions);
+            }
+        }
+
+        Path targetFilePath = Paths.get(filePath);
+
+        if (isFileExists(filePath)) {
+            Files.delete(targetFilePath);
+        }
+
+        Files.move(tmpFilePath, targetFilePath);
+    }
+
+    private Map<String, Map<InetSocketAddress, Integer>> fetchDnsSessions() {
+        if (isFileExists(filePath)) {
+            try (FileInputStream fis = new FileInputStream(filePath)) {
+                try (ObjectInputStream ois = new ObjectInputStream(fis)) {
+                    return (Map<String, Map<InetSocketAddress, Integer>>) ois.readObject();
+                }
+            } catch (IOException | ClassNotFoundException e) {
+                log.error("Failed to fetch DNS sessions!", e);
+            }
+        }
+        return Collections.emptyMap();
+    }
+
+    private boolean isFileExists(String filePath) {
+        File f = new File(filePath);
+        return f.exists() && !f.isDirectory();
     }
 }

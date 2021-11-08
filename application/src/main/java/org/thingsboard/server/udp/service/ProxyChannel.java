@@ -40,6 +40,7 @@ public class ProxyChannel {
         this.client = client;
         this.target = target;
         this.proxyPort = proxyPort;
+        this.lastActivityTime = System.currentTimeMillis();
     }
 
     public void toTarget(DatagramPacket packet) {

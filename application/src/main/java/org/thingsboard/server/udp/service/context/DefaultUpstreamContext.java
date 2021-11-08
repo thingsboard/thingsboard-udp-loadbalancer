@@ -66,6 +66,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
     private Channel clientChannel;
     private Bootstrap proxyBootstrap;
     private Map<InetSocketAddress, ProxyChannel> clientsMap = new ConcurrentHashMap<>();
+    @Getter
     private Map<Integer, ProxyChannel> proxyPortMap = new ConcurrentHashMap<>();
 
     public DefaultUpstreamContext(LbUpstreamProperties conf, Resolver resolver, LbStrategy strategy) {
@@ -101,12 +102,12 @@ public class DefaultUpstreamContext implements UpstreamContext {
     }
 
     @Override
-    public ListenableFuture<ProxyChannel> getOrCreateTargetChannel(InetSocketAddress client) throws Exception {
+    public ListenableFuture<ProxyChannel> getOrCreateTargetChannel(InetSocketAddress client, int port) {
         ProxyChannel result = clientsMap.get(client);
         if (result == null) {
             SettableFuture<ProxyChannel> resultFuture = SettableFuture.create();
             context.getExecutor().submit(() -> {
-                doGetOrCreateTargetChannelSync(client, resultFuture);
+                doGetOrCreateTargetChannelSync(client, port, resultFuture);
             });
             return resultFuture;
         } else {
@@ -114,7 +115,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
         }
     }
 
-    private void doGetOrCreateTargetChannelSync(InetSocketAddress client, SettableFuture<ProxyChannel> resultFuture) {
+    private void doGetOrCreateTargetChannelSync(InetSocketAddress client, int port, SettableFuture<ProxyChannel> resultFuture) {
         try {
             InetSocketAddress target = getNextServer(client, resolver.resolve(conf.getTargetAddress()));
             if (target == null) {
@@ -126,7 +127,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
                 if (existing != null) {
                     resultFuture.set(existing);
                 } else {
-                    final Channel targetChannel = proxyBootstrap.bind(0).sync().channel();
+                    final Channel targetChannel = proxyBootstrap.bind(port).sync().channel();
                     int proxyPort = ((InetSocketAddress) targetChannel.localAddress()).getPort();
                     ProxyChannel createdChannel = new ProxyChannel(clientChannel, targetChannel, client, target, proxyPort);
                     clientsMap.put(client, createdChannel);

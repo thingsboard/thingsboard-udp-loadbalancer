@@ -24,7 +24,7 @@ import java.util.concurrent.ExecutorService;
 
 public interface UpstreamContext {
 
-    ListenableFuture<ProxyChannel> getOrCreateTargetChannel(InetSocketAddress client) throws Exception;
+    ListenableFuture<ProxyChannel> getOrCreateTargetChannel(InetSocketAddress client, int port);
 
     void processReply(DatagramPacket packet);
 
