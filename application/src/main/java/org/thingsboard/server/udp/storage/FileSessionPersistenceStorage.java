@@ -15,6 +15,7 @@
  */
 package org.thingsboard.server.udp.storage;
 
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +41,7 @@ import java.util.Map;
 public class FileSessionPersistenceStorage implements SessionPersistenceStorage {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     public static final String TMP_PREFIX = ".tmp";
+    public static final String CORRUPTED_PREFIX = ".corrupted";
 
     @Value("${lb.sessions.file-path:./sessions}")
     private String filePath;
@@ -64,7 +66,15 @@ public class FileSessionPersistenceStorage implements SessionPersistenceStorage 
 
     public Map<String, Map<Integer, InetSocketAddress>> getSessions() throws IOException {
         if (isFileExists(filePath)) {
-            return MAPPER.readValue(new File(filePath), new TypeReference<>() {});
+            try {
+                return MAPPER.readValue(new File(filePath), new TypeReference<>() {
+                });
+            } catch (Exception e) {
+                if (e instanceof JsonParseException) {
+                    Files.move(Paths.get(filePath), Paths.get(filePath + CORRUPTED_PREFIX));
+                }
+                log.warn("Failed to fetch Sessions!", e);
+            }
         }
         return Collections.emptyMap();
     }
