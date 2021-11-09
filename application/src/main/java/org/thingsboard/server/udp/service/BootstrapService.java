@@ -35,7 +35,7 @@ import org.thingsboard.server.udp.service.context.LbContext;
 import org.thingsboard.server.udp.service.resolve.DnsUpdateEvent;
 import org.thingsboard.server.udp.service.resolve.Resolver;
 import org.thingsboard.server.udp.service.strategy.RoundRobinLbStrategy;
-import org.thingsboard.server.udp.storage.DnsSessionsStorage;
+import org.thingsboard.server.udp.storage.SessionPersistenceStorage;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -54,7 +54,7 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
     private final LbContext context;
     private final LbProperties properties;
     private final Resolver resolver;
-    private final DnsSessionsStorage sessionsStorage;
+    private final SessionPersistenceStorage sessionsStorage;
     private final Map<String, DefaultUpstreamContext> upstreams = new ConcurrentHashMap<>();
 
     @Value("${lb.netty.worker_group_thread_count:4}")

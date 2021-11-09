@@ -37,7 +37,7 @@ import java.util.Map;
 @Slf4j
 @Service
 @ConditionalOnProperty(prefix = "lb.sessions", value = "storage-type", havingValue = "file", matchIfMissing = true)
-public class FileDnsSessionsStorage implements DnsSessionsStorage {
+public class FileSessionPersistenceStorage implements SessionPersistenceStorage {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     public static final String TMP_PREFIX = ".tmp";
 

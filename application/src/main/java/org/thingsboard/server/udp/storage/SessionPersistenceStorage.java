@@ -21,7 +21,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Map;
 
-public interface DnsSessionsStorage {
+public interface SessionPersistenceStorage {
     void saveSessions(Map<String, DefaultUpstreamContext> upstreams) throws IOException;
 
     Map<String, Map<Integer, InetSocketAddress>> getSessions() throws IOException;
