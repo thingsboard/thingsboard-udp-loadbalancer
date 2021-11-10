@@ -30,7 +30,7 @@ lb:
   # DNS resolver properties
   resolver:
     # Type of DNS resolver. default or advanced
-    type: "${LB_RESOLVER_TYPE:advanced}"
+    type: "${LB_RESOLVER_TYPE:default}"
     # DNS record validity time
     validity-time: "${LB_RESOLVER_VALIDITY:60}"
     # List of dns servers to be used by advanced resolver
@@ -42,17 +42,28 @@ lb:
     persistence_interval: "${LB_SESSIONS_PERSISTENCE_INTERVAL:60}"
     file-path: "${LB_SESSIONS_FILE_PATH:./sessions}"
   upstreams:
-    - name: "${LB_UPSTREAM_NAME:CoAP}"
-      bind-address: "${LB_UPSTREAM_BIND_ADDRESS:0.0.0.0}"
-      bind-port: "${LB_UPSTREAM_BIND_PORT:5683}"
-      target-address: "${LB_UPSTREAM_ADDRESS:yb.thingsboard.io}"
-      target-port: "${LB_UPSTREAM_PORT:5683}"
+    - name: "${COAP_UPSTREAM_NAME:CoAP}"
+      bind-address: "${COAP_UPSTREAM_BIND_ADDRESS:0.0.0.0}"
+      bind-port: "${COAP_UPSTREAM_BIND_PORT:5683}"
+      target-address: "${COAP_UPSTREAM_ADDRESS:tb-coap-transport}"
+      target-port: "${COAP_UPSTREAM_PORT:5683}"
       connections:
-        max: "${LB_UPSTREAM_CONNECTIONS_MAX:10000}"
-        per-ip-limit: "${LB_UPSTREAM_CONNECTIONS_IP_LIMIT:10}"
-        timeout: "${LB_UPSTREAM_CONNECTIONS_TIMEOUT_IN_SEC:900}"
-        invalidate-frequency: "${LB_UPSTREAM_CONNECTIONS_INVALIDATE_FREQUENCY_IN_SEC:10}"
-        log-frequency: "${LB_UPSTREAM_CONNECTIONS_LOG_FREQUENCY_IN_SEC:10}"
+        max: "${COAP_UPSTREAM_CONNECTIONS_MAX:10000}"
+        per-ip-limit: "${COAP_UPSTREAM_CONNECTIONS_IP_LIMIT:10}"
+        timeout: "${COAP_UPSTREAM_CONNECTIONS_TIMEOUT_IN_SEC:900}"
+        invalidate-frequency: "${COAP_UPSTREAM_CONNECTIONS_INVALIDATE_FREQUENCY_IN_SEC:10}"
+        log-frequency: "${COAP_UPSTREAM_CONNECTIONS_LOG_FREQUENCY_IN_SEC:10}"
+    - name: "${LWM2M_UPSTREAM_NAME:LwM2M}"
+      bind-address: "${LWM2M_UPSTREAM_BIND_ADDRESS:0.0.0.0}"
+      bind-port: "${LWM2M_UPSTREAM_BIND_PORT:5685}"
+      target-address: "${LWM2M_UPSTREAM_ADDRESS:tb-lwm2m-transport}"
+      target-port: "${LWM2M_UPSTREAM_PORT:5685}"
+      connections:
+        max: "${LWM2M_UPSTREAM_CONNECTIONS_MAX:10000}"
+        per-ip-limit: "${LWM2M_UPSTREAM_CONNECTIONS_IP_LIMIT:10}"
+        timeout: "${LWM2M_UPSTREAM_CONNECTIONS_TIMEOUT_IN_SEC:900}"
+        invalidate-frequency: "${LWM2M_UPSTREAM_CONNECTIONS_INVALIDATE_FREQUENCY_IN_SEC:10}"
+        log-frequency: "${LWM2M_UPSTREAM_CONNECTIONS_LOG_FREQUENCY_IN_SEC:10}"
   netty:
     worker_group_thread_count: "${LB_NETTY_WORKER_THREADS:4}"
     # One of DISABLED, SIMPLE, ADVANCED, PARANOID
