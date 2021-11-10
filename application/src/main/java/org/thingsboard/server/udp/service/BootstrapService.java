@@ -62,7 +62,7 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
     @Value("${lb.netty.leak_detection_lvl:SIMPLE}")
     private String leakDetectionLevel;
 
-    @Value("${lb.sessions.persist:true}")
+    @Value("${lb.sessions.persistence:true}")
     private boolean persistence;
     @Value("${lb.sessions.persistence_interval:600}")
     private long persistenceInterval;
