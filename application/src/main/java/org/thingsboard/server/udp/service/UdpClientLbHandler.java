@@ -42,7 +42,7 @@ public class UdpClientLbHandler extends SimpleChannelInboundHandler<DatagramPack
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket packet) throws Exception {
         final InetSocketAddress client = packet.sender();
-        ListenableFuture<ProxyChannel> proxyChannelFuture = upstreamContext.getOrCreateTargetChannel(client);
+        ListenableFuture<ProxyChannel> proxyChannelFuture = upstreamContext.getOrCreateTargetChannel(client, 0);
         Futures.addCallback(proxyChannelFuture, new FutureCallback<>() {
             @Override
             public void onSuccess(@Nullable ProxyChannel proxyChannel) {

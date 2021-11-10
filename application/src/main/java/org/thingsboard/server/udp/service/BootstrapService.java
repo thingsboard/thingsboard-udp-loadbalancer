@@ -35,11 +35,15 @@ import org.thingsboard.server.udp.service.context.LbContext;
 import org.thingsboard.server.udp.service.resolve.DnsUpdateEvent;
 import org.thingsboard.server.udp.service.resolve.Resolver;
 import org.thingsboard.server.udp.service.strategy.RoundRobinLbStrategy;
+import org.thingsboard.server.udp.storage.SessionPersistenceStorage;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -50,6 +54,7 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
     private final LbContext context;
     private final LbProperties properties;
     private final Resolver resolver;
+    private final SessionPersistenceStorage sessionsStorage;
     private final Map<String, DefaultUpstreamContext> upstreams = new ConcurrentHashMap<>();
 
     @Value("${lb.netty.worker_group_thread_count:4}")
@@ -57,6 +62,10 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
     @Value("${lb.netty.leak_detection_lvl:SIMPLE}")
     private String leakDetectionLevel;
 
+    @Value("${lb.sessions.persistence:true}")
+    private boolean persistence;
+    @Value("${lb.sessions.persistence_interval:600}")
+    private long persistenceInterval;
 
     private EventLoopGroup workerGroup;
 
@@ -84,6 +93,8 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
             }
         });
 
+        Map<String, Map<Integer, InetSocketAddress>> fetchedDnsSessions = sessionsStorage.getSessions();
+
         for (LbUpstreamProperties upstreamProperties : properties.getUpstreams()) {
             final DefaultUpstreamContext ctx = new DefaultUpstreamContext(upstreamProperties, resolver, new RoundRobinLbStrategy());
             ctx.init(workerGroup, context);
@@ -101,6 +112,20 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
                     .sync().channel();
             ctx.setClientChannel(serverChannel);
             upstreams.put(upstreamProperties.getName(), ctx);
+            Map<Integer, InetSocketAddress> clients = fetchedDnsSessions.get(upstreamProperties.getName());
+            if (clients != null) {
+                clients.forEach((port, client) -> ctx.getOrCreateTargetChannel(client, port));
+            }
+        }
+
+        if (persistence) {
+            context.getScheduler().scheduleWithFixedDelay(() -> {
+                try {
+                    sessionsStorage.saveSessions(upstreams);
+                } catch (IOException e) {
+                    log.error("Failed to persist DNS sessions!", e);
+                }
+            }, persistenceInterval, persistenceInterval, TimeUnit.SECONDS);
         }
 
         log.info("ThingsBoard UDP Load Balancer Service started!");

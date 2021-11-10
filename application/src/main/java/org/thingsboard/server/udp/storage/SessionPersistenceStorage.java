@@ -13,20 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.thingsboard.server.udp.service.context;
+package org.thingsboard.server.udp.storage;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import io.netty.channel.socket.DatagramPacket;
-import org.thingsboard.server.udp.service.ProxyChannel;
+import org.thingsboard.server.udp.service.context.DefaultUpstreamContext;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.concurrent.ExecutorService;
+import java.util.Map;
 
-public interface UpstreamContext {
+public interface SessionPersistenceStorage {
+    void saveSessions(Map<String, DefaultUpstreamContext> upstreams) throws IOException;
 
-    ListenableFuture<ProxyChannel> getOrCreateTargetChannel(InetSocketAddress client, int port);
-
-    void processReply(DatagramPacket packet);
-
-    ExecutorService getExecutor();
+    Map<String, Map<Integer, InetSocketAddress>> getSessions() throws IOException;
 }
