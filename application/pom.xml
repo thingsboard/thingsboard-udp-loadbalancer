@@ -58,10 +58,6 @@
             <artifactId>guava</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.kubernetes</groupId>
-            <artifactId>client-java</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.sun.winsw</groupId>
             <artifactId>winsw</artifactId>
             <classifier>bin</classifier>
