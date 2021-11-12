@@ -16,10 +16,12 @@
 
 FROM thingsboard/openjdk11
 
-COPY start-tb-udp-lb.sh ${pkg.name}.deb /tmp/
+COPY start-tb-udp-lb.sh tb-udp-lb.conf tb-udp-lb.deb logback.xml /tmp/
 
 RUN chmod a+x /tmp/*.sh \
-    && mv /tmp/start-tb-udp-lb.sh /usr/bin
+    && mv /tmp/start-tb-udp-lb.sh /usr/bin \
+    && mkdir /config \
+    && mv /tmp/logback.xml /tmp/tb-udp-lb.conf /config 
 
 RUN yes | dpkg -i /tmp/${pkg.name}.deb
 RUN rm /tmp/${pkg.name}.deb
