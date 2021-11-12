@@ -63,11 +63,11 @@ public abstract class AbstractResolver implements Resolver {
                 newAddresses = doResolve(hostname);
                 if (newAddresses == null || newAddresses.isEmpty()) {
                     log.warn("DNS address: {} resolves to empty list!", hostname);
-                    newAddresses = Collections.emptyList();
+                    return;
                 }
             } catch (Exception e) {
                 log.warn("Failed to resolve the DNS address: {}", hostname, e);
-                newAddresses = Collections.emptyList();
+                return;
             }
             Set<InetAddress> removedAddresses = new HashSet<>(oldAddresses);
             removedAddresses.removeAll(newAddresses);
