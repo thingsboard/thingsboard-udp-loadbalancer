@@ -15,15 +15,26 @@
  */
 package org.thingsboard.server.udp.conf;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
+import java.net.InetAddress;
+
+@NoArgsConstructor
+@AllArgsConstructor
 @Data
 public class LbUpstreamProperties {
 
     private String name;
     private String bindAddress;
     private int bindPort;
+    private boolean bindSeparately;
     private String targetAddress;
     private int targetPort;
     private LbUpstreamConnectionProperties connections;
+
+    public LbUpstreamProperties copy(InetAddress ip) {
+        return new LbUpstreamProperties(name + "-" + ip.getHostAddress(), ip.getHostAddress(), bindPort, bindSeparately, targetAddress, targetPort, connections);
+    }
 }

@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -40,17 +40,28 @@ import org.thingsboard.server.udp.storage.SessionPersistenceStorage;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
 
+    private static final String ALL_ADDRESSES = "0.0.0.0";
     private final LbContext context;
     private final LbProperties properties;
     private final Resolver resolver;
@@ -93,6 +104,8 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
             }
         });
 
+        properties.setUpstreams(duplicateInterfacesIfBindSeparately(properties.getUpstreams()));
+
         Map<String, Map<Integer, InetSocketAddress>> fetchedDnsSessions = sessionsStorage.getSessions();
 
         for (LbUpstreamProperties upstreamProperties : properties.getUpstreams()) {
@@ -106,8 +119,11 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
                         protected void initChannel(NioDatagramChannel nioDatagramChannel) {
                             nioDatagramChannel.pipeline().addLast(new UdpClientLbHandler(ctx));
                         }
-                    }).option(ChannelOption.SO_BROADCAST, true);
-
+                    });
+            if (!upstreamProperties.isBindSeparately() || upstreamProperties.getBindAddress().equals(ALL_ADDRESSES)) {
+                b.option(ChannelOption.SO_BROADCAST, true);
+            }
+            log.info("[{}] Binding to: {}:{}", upstreamProperties.getName(), upstreamProperties.getBindAddress(), upstreamProperties.getBindPort());
             Channel serverChannel = b.bind(upstreamProperties.getBindAddress(), upstreamProperties.getBindPort())
                     .sync().channel();
             ctx.setClientChannel(serverChannel);
@@ -129,6 +145,36 @@ public class BootstrapService implements ApplicationListener<DnsUpdateEvent> {
         }
 
         log.info("ThingsBoard UDP Load Balancer Service started!");
+    }
+
+    private List<LbUpstreamProperties> duplicateInterfacesIfBindSeparately(List<LbUpstreamProperties> src) {
+        return src.stream().flatMap(
+                original -> {
+                    if (original.isBindSeparately() && original.getBindAddress().equals(ALL_ADDRESSES)) {
+                        try {
+                            List<NetworkInterface> networkInterfaces = Collections.list(NetworkInterface.getNetworkInterfaces());
+                            if (hasOnlyOneInterface(networkInterfaces)) {
+                                return Stream.of(original);
+                            } else {
+                                Set<InetAddress> allIps = new LinkedHashSet<>();
+                                for (NetworkInterface networkInterface : networkInterfaces) {
+                                    allIps.addAll(Collections.list(networkInterface.getInetAddresses()));
+                                }
+                                return allIps.stream().map(original::copy);
+                            }
+                        } catch (SocketException e) {
+                            log.warn("[{}] Failed to bind to all addresses due to: ", original.getName(), e);
+                            return Stream.of(original);
+                        }
+                    } else {
+                        return Stream.of(original);
+                    }
+                }
+        ).collect(Collectors.toList());
+    }
+
+    private boolean hasOnlyOneInterface(List<NetworkInterface> networkInterfaces) {
+        return networkInterfaces.size() == 2 && networkInterfaces.stream().anyMatch(ni -> ni.getName().equalsIgnoreCase("lo"));
     }
 
     @PreDestroy

@@ -45,7 +45,8 @@ lb:
     - name: "${COAP_UPSTREAM_NAME:CoAP}"
       bind-address: "${COAP_UPSTREAM_BIND_ADDRESS:0.0.0.0}"
       bind-port: "${COAP_UPSTREAM_BIND_PORT:5683}"
-      target-address: "${COAP_UPSTREAM_ADDRESS:tb-coap-transport}"
+      bind-separately: "${COAP_UPSTREAM_BIND_TO_SEPARATE_IPS:true}"
+      target-address: "${COAP_UPSTREAM_ADDRESS:coap.thingsboard.cloud}"
       target-port: "${COAP_UPSTREAM_PORT:5683}"
       connections:
         max: "${COAP_UPSTREAM_CONNECTIONS_MAX:10000}"
@@ -56,7 +57,7 @@ lb:
     - name: "${LWM2M_UPSTREAM_NAME:LwM2M}"
       bind-address: "${LWM2M_UPSTREAM_BIND_ADDRESS:0.0.0.0}"
       bind-port: "${LWM2M_UPSTREAM_BIND_PORT:5685}"
-      target-address: "${LWM2M_UPSTREAM_ADDRESS:tb-lwm2m-transport}"
+      target-address: "${LWM2M_UPSTREAM_ADDRESS:coap.thingsboard.cloud}"
       target-port: "${LWM2M_UPSTREAM_PORT:5685}"
       connections:
         max: "${LWM2M_UPSTREAM_CONNECTIONS_MAX:10000}"
