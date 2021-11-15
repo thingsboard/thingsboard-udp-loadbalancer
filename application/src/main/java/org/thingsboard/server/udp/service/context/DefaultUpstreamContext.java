@@ -61,7 +61,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
     private final Lock channelRegisterLock = new ReentrantLock();
 
     private final AtomicInteger connectionsCount;
-    private final Map<String, AtomicInteger> ipConnections;
+    private final Map<String, AtomicInteger> perIpConnectionsCounts;
 
     private LbContext context;
     @Getter
@@ -77,7 +77,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
         this.conf = conf;
         this.resolver = resolver;
         this.strategy = strategy;
-        this.ipConnections = new HashMap<>();
+        this.perIpConnectionsCounts = new HashMap<>();
         this.connectionsCount = new AtomicInteger(0);
     }
 
@@ -158,7 +158,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
             throw new RuntimeException("[" + hostName + "] Failed to create new session. Max limit of sessions reached!");
         }
 
-        AtomicInteger perIpCount = ipConnections.computeIfAbsent(hostName, hn -> new AtomicInteger(0));
+        AtomicInteger perIpCount = perIpConnectionsCounts.computeIfAbsent(hostName, hn -> new AtomicInteger(0));
 
         if (perIpCount.get() >= conf.getConnections().getPerIpLimit()) {
             throw new RuntimeException("[" + hostName + "] Failed to create new session. Max limit of sessions per ip reached!");
@@ -249,7 +249,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
             clientsMap.remove(proxy.getClient());
             proxyPortMap.remove(proxy.getProxyPort());
             connectionsCount.decrementAndGet();
-            ipConnections.get(proxy.getClient().getHostName()).decrementAndGet();
+            perIpConnectionsCounts.get(proxy.getClient().getHostName()).decrementAndGet();
         } finally {
             channelRegisterLock.unlock();
         }
