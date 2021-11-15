@@ -28,5 +28,5 @@ echo "Starting '${project.name}' ..."
 cd ${pkg.installFolder}/bin
 
 exec java -cp ${jarfile} $JAVA_OPTS -Dloader.main=org.thingsboard.server.udp.ThingsboardUdpLbApplication \
-                    -Dlogging.config=/config/logback.xml \
+                    -Dlogging.config=${CONF_FOLDER}/logback.xml \
                     org.springframework.boot.loader.PropertiesLauncher

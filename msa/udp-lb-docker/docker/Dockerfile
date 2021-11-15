@@ -17,6 +17,7 @@
 FROM thingsboard/openjdk11
 
 COPY start-tb-udp-lb.sh ${pkg.name}.deb /tmp/
+COPY conf/* /config/
 
 RUN chmod a+x /tmp/*.sh \
     && mv /tmp/start-tb-udp-lb.sh /usr/bin
