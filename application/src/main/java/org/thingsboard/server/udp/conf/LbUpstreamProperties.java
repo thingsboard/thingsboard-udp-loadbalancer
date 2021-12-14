@@ -33,8 +33,9 @@ public class LbUpstreamProperties {
     private String targetAddress;
     private int targetPort;
     private LbUpstreamConnectionProperties connections;
+    private String rateLimits;
 
     public LbUpstreamProperties copy(InetAddress ip) {
-        return new LbUpstreamProperties(name + "-" + ip.getHostAddress(), ip.getHostAddress(), bindPort, bindSeparately, targetAddress, targetPort, connections);
+        return new LbUpstreamProperties(name + "-" + ip.getHostAddress(), ip.getHostAddress(), bindPort, bindSeparately, targetAddress, targetPort, connections, rateLimits);
     }
 }

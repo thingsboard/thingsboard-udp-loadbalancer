@@ -20,6 +20,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.socket.DatagramPacket;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.thingsboard.server.udp.util.TbRateLimits;
 
 import java.net.InetSocketAddress;
 
@@ -33,17 +34,24 @@ public class ProxyChannel {
     private InetSocketAddress target;
     private final int proxyPort;
     private volatile long lastActivityTime;
+    private final TbRateLimits rateLimits;
 
-    public ProxyChannel(Channel clientChannel, Channel targetChannel, InetSocketAddress client, InetSocketAddress target, int proxyPort) {
+    public ProxyChannel(Channel clientChannel, Channel targetChannel, InetSocketAddress client, InetSocketAddress target, int proxyPort, String limitsConfiguration) {
         this.clientChannel = clientChannel;
         this.targetChannel = targetChannel;
         this.client = client;
         this.target = target;
         this.proxyPort = proxyPort;
         this.lastActivityTime = System.currentTimeMillis();
+        this.rateLimits = new TbRateLimits(limitsConfiguration);
     }
 
     public void toTarget(DatagramPacket packet) {
+        if (!rateLimits.tryConsume()) {
+                log.info("[{}] Failed to send request. Max request limit reached", client.getAddress());
+            return;
+        }
+
         send(client, target, targetChannel, packet.content());
         lastActivityTime = System.currentTimeMillis();
     }

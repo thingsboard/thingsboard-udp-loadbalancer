@@ -15,7 +15,6 @@
  */
 package org.thingsboard.server.udp.service;
 
-
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -58,7 +57,7 @@ public class UdpClientLbHandler extends SimpleChannelInboundHandler<DatagramPack
             @Override
             public void onFailure(Throwable t) {
                 try {
-                    log.info("[{}][{}] Unexpected exception: ", client, t);
+                    log.info("[{}] Unexpected exception: ", client, t);
                 } finally {
                     ReferenceCountUtil.release(packet);
                 }

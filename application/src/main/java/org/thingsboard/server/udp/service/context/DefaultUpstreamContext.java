@@ -35,6 +35,7 @@ import org.thingsboard.server.udp.service.resolve.DnsUpdateEvent;
 import org.thingsboard.server.udp.service.resolve.Resolver;
 import org.thingsboard.server.udp.service.strategy.LbStrategy;
 import org.thingsboard.server.udp.util.IpUtil;
+import org.thingsboard.server.udp.util.LimitsException;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -47,6 +48,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -64,6 +66,8 @@ public class DefaultUpstreamContext implements UpstreamContext {
     private final AtomicInteger connectionsCount;
     private final Map<String, AtomicInteger> perIpConnectionsCounts;
     private final Map<String, AtomicInteger> perSubnetConnectionsCounts;
+
+    private final Map<InetSocketAddress, AtomicLong> blackListedClients = new ConcurrentHashMap<>();
 
     private LbContext context;
     @Getter
@@ -135,10 +139,10 @@ public class DefaultUpstreamContext implements UpstreamContext {
                 if (existing != null) {
                     resultFuture.set(existing);
                 } else {
-                    checkLimits(client.getAddress().getHostAddress());
+                    checkLimits(client);
                     final Channel targetChannel = proxyBootstrap.bind(port).sync().channel();
                     int proxyPort = ((InetSocketAddress) targetChannel.localAddress()).getPort();
-                    ProxyChannel createdChannel = new ProxyChannel(clientChannel, targetChannel, client, target, proxyPort);
+                    ProxyChannel createdChannel = new ProxyChannel(clientChannel, targetChannel, client, target, proxyPort, conf.getRateLimits());
                     clientsMap.put(client, createdChannel);
                     proxyPortMap.put(proxyPort, createdChannel);
                     if (log.isDebugEnabled()) {
@@ -146,6 +150,9 @@ public class DefaultUpstreamContext implements UpstreamContext {
                     }
                     resultFuture.set(createdChannel);
                 }
+            } catch (LimitsException le) {
+                blackListedClients.computeIfAbsent(client, c -> new AtomicLong()).set(System.currentTimeMillis() + conf.getConnections().getMaxBlackListDuration());
+                throw le;
             } finally {
                 channelRegisterLock.unlock();
             }
@@ -155,21 +162,32 @@ public class DefaultUpstreamContext implements UpstreamContext {
         }
     }
 
-    private void checkLimits(String hostName) {
+    private void checkLimits(InetSocketAddress client) {
+        String hostAddress = client.getAddress().getHostAddress();
+
+        AtomicLong blacklistedEndTime = blackListedClients.get(client);
+        if (blacklistedEndTime != null) {
+            if (blacklistedEndTime.get() <= System.currentTimeMillis()) {
+                blackListedClients.remove(client);
+            } else {
+                throw new LimitsException("[" + hostAddress + "] Failed to create new session. Address is blacklisted!");
+            }
+        }
+
         if (connectionsCount.get() >= conf.getConnections().getMax()) {
-            throw new RuntimeException("[" + hostName + "] Failed to create new session. Max limit of sessions reached!");
+            throw new LimitsException("[" + hostAddress + "] Failed to create new session. Max limit of sessions reached!");
         }
 
-        AtomicInteger perIpCount = perIpConnectionsCounts.computeIfAbsent(hostName, hn -> new AtomicInteger(0));
+        AtomicInteger perIpCount = perIpConnectionsCounts.computeIfAbsent(hostAddress, hn -> new AtomicInteger(0));
 
-        if (perIpCount.get() > conf.getConnections().getPerIpLimit()) {
-            throw new RuntimeException("[" + hostName + "] Failed to create new session. Max limit of sessions per ip reached!");
+        if (perIpCount.get() >= conf.getConnections().getPerIpLimit()) {
+            throw new LimitsException("[" + hostAddress + "] Failed to create new session. Max limit of sessions per ip reached!");
         }
 
-        AtomicInteger perSubnetCount = perSubnetConnectionsCounts.computeIfAbsent(IpUtil.getCIDR(hostName, conf.getConnections().getCidrPrefix()), hn -> new AtomicInteger(0));
+        AtomicInteger perSubnetCount = perSubnetConnectionsCounts.computeIfAbsent(IpUtil.getCIDR(hostAddress, conf.getConnections().getCidrPrefix()), hn -> new AtomicInteger(0));
 
-        if (perSubnetCount.get() > conf.getConnections().getPerSubnetLimit()) {
-            throw new RuntimeException("[" + hostName + "] Failed to create new session. Max limit of sessions per subnet reached!");
+        if (perSubnetCount.get() >= conf.getConnections().getPerSubnetLimit()) {
+            throw new LimitsException("[" + hostAddress + "] Failed to create new session. Max limit of sessions per subnet reached!");
         }
 
         connectionsCount.incrementAndGet();
