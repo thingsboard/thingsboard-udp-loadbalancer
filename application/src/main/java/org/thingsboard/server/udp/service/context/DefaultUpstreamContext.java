@@ -34,6 +34,7 @@ import org.thingsboard.server.udp.service.UdpProxyLbHandler;
 import org.thingsboard.server.udp.service.resolve.DnsUpdateEvent;
 import org.thingsboard.server.udp.service.resolve.Resolver;
 import org.thingsboard.server.udp.service.strategy.LbStrategy;
+import org.thingsboard.server.udp.util.IpUtil;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -62,6 +63,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
 
     private final AtomicInteger connectionsCount;
     private final Map<String, AtomicInteger> perIpConnectionsCounts;
+    private final Map<String, AtomicInteger> perSubnetConnectionsCounts;
 
     private LbContext context;
     @Getter
@@ -78,6 +80,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
         this.resolver = resolver;
         this.strategy = strategy;
         this.perIpConnectionsCounts = new HashMap<>();
+        this.perSubnetConnectionsCounts = new HashMap<>();
         this.connectionsCount = new AtomicInteger(0);
     }
 
@@ -132,8 +135,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
                 if (existing != null) {
                     resultFuture.set(existing);
                 } else {
-
-                    checkLimits(client.getHostName());
+                    checkLimits(client.getAddress().getHostAddress());
                     final Channel targetChannel = proxyBootstrap.bind(port).sync().channel();
                     int proxyPort = ((InetSocketAddress) targetChannel.localAddress()).getPort();
                     ProxyChannel createdChannel = new ProxyChannel(clientChannel, targetChannel, client, target, proxyPort);
@@ -160,11 +162,18 @@ public class DefaultUpstreamContext implements UpstreamContext {
 
         AtomicInteger perIpCount = perIpConnectionsCounts.computeIfAbsent(hostName, hn -> new AtomicInteger(0));
 
-        if (perIpCount.get() >= conf.getConnections().getPerIpLimit()) {
+        if (perIpCount.get() > conf.getConnections().getPerIpLimit()) {
             throw new RuntimeException("[" + hostName + "] Failed to create new session. Max limit of sessions per ip reached!");
         }
 
+        AtomicInteger perSubnetCount = perSubnetConnectionsCounts.computeIfAbsent(IpUtil.getCIDR(hostName, conf.getConnections().getCidrPrefix()), hn -> new AtomicInteger(0));
+
+        if (perSubnetCount.get() > conf.getConnections().getPerSubnetLimit()) {
+            throw new RuntimeException("[" + hostName + "] Failed to create new session. Max limit of sessions per subnet reached!");
+        }
+
         connectionsCount.incrementAndGet();
+        perSubnetCount.incrementAndGet();
         perIpCount.incrementAndGet();
     }
 
@@ -250,6 +259,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
             proxyPortMap.remove(proxy.getProxyPort());
             connectionsCount.decrementAndGet();
             perIpConnectionsCounts.get(proxy.getClient().getHostName()).decrementAndGet();
+            perSubnetConnectionsCounts.get(IpUtil.getCIDR(proxy.getClient().getHostName(), conf.getConnections().getCidrPrefix())).decrementAndGet();
         } finally {
             channelRegisterLock.unlock();
         }
