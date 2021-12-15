@@ -20,7 +20,9 @@ import io.netty.channel.socket.DatagramPacket;
 import org.thingsboard.server.udp.service.ProxyChannel;
 
 import java.net.InetSocketAddress;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicLong;
 
 public interface UpstreamContext {
 
@@ -29,4 +31,6 @@ public interface UpstreamContext {
     void processReply(DatagramPacket packet);
 
     ExecutorService getExecutor();
+
+    Map<InetSocketAddress, AtomicLong> getDisallowedListedClients();
 }

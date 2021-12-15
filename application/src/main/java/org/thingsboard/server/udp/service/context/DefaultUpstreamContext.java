@@ -58,6 +58,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
     private static final Random RND = new Random();
 
     private final String name;
+    @Getter
     private final LbUpstreamProperties conf;
     private final Resolver resolver;
     private final LbStrategy strategy;
@@ -67,7 +68,8 @@ public class DefaultUpstreamContext implements UpstreamContext {
     private final Map<String, AtomicInteger> perIpConnectionsCounts;
     private final Map<String, AtomicInteger> perSubnetConnectionsCounts;
 
-    private final Map<InetSocketAddress, AtomicLong> blackListedClients = new ConcurrentHashMap<>();
+    @Getter
+    private final Map<InetSocketAddress, AtomicLong> disallowedListedClients = new ConcurrentHashMap<>();
 
     private LbContext context;
     @Getter
@@ -142,7 +144,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
                     checkLimits(client);
                     final Channel targetChannel = proxyBootstrap.bind(port).sync().channel();
                     int proxyPort = ((InetSocketAddress) targetChannel.localAddress()).getPort();
-                    ProxyChannel createdChannel = new ProxyChannel(clientChannel, targetChannel, client, target, proxyPort, conf.getRateLimits());
+                    ProxyChannel createdChannel = new ProxyChannel(clientChannel, targetChannel, client, target, proxyPort, conf.getRateLimits(), this);
                     clientsMap.put(client, createdChannel);
                     proxyPortMap.put(proxyPort, createdChannel);
                     if (log.isDebugEnabled()) {
@@ -151,7 +153,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
                     resultFuture.set(createdChannel);
                 }
             } catch (LimitsException le) {
-                blackListedClients.computeIfAbsent(client, c -> new AtomicLong()).set(System.currentTimeMillis() + conf.getConnections().getMaxBlackListDuration());
+                disallowedListedClients.computeIfAbsent(client, c -> new AtomicLong()).set(System.currentTimeMillis());
                 throw le;
             } finally {
                 channelRegisterLock.unlock();
@@ -164,15 +166,6 @@ public class DefaultUpstreamContext implements UpstreamContext {
 
     private void checkLimits(InetSocketAddress client) {
         String hostAddress = client.getAddress().getHostAddress();
-
-        AtomicLong blacklistedEndTime = blackListedClients.get(client);
-        if (blacklistedEndTime != null) {
-            if (blacklistedEndTime.get() <= System.currentTimeMillis()) {
-                blackListedClients.remove(client);
-            } else {
-                throw new LimitsException("[" + hostAddress + "] Failed to create new session. Address is blacklisted!");
-            }
-        }
 
         if (connectionsCount.get() >= conf.getConnections().getMax()) {
             throw new LimitsException("[" + hostAddress + "] Failed to create new session. Max limit of sessions reached!");
@@ -273,11 +266,13 @@ public class DefaultUpstreamContext implements UpstreamContext {
     private void close(ProxyChannel proxy) throws InterruptedException {
         channelRegisterLock.lock();
         try {
-            clientsMap.remove(proxy.getClient());
+            InetSocketAddress client = proxy.getClient();
+            clientsMap.remove(client);
             proxyPortMap.remove(proxy.getProxyPort());
             connectionsCount.decrementAndGet();
-            perIpConnectionsCounts.get(proxy.getClient().getHostName()).decrementAndGet();
-            perSubnetConnectionsCounts.get(IpUtil.getCIDR(proxy.getClient().getHostName(), conf.getConnections().getCidrPrefix())).decrementAndGet();
+            perIpConnectionsCounts.get(client.getHostName()).decrementAndGet();
+            perSubnetConnectionsCounts.get(IpUtil.getCIDR(client.getHostName(), conf.getConnections().getCidrPrefix())).decrementAndGet();
+            disallowedListedClients.remove(client);
         } finally {
             channelRegisterLock.unlock();
         }

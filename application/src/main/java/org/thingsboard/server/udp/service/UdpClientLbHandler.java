@@ -24,16 +24,18 @@ import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.ReferenceCountUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.checkerframework.checker.nullness.qual.Nullable;
-import org.thingsboard.server.udp.service.context.UpstreamContext;
+import org.thingsboard.server.udp.service.context.DefaultUpstreamContext;
 
 import java.net.InetSocketAddress;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 public class UdpClientLbHandler extends SimpleChannelInboundHandler<DatagramPacket> {
 
-    private final UpstreamContext upstreamContext;
+    private final DefaultUpstreamContext upstreamContext;
 
-    public UdpClientLbHandler(UpstreamContext ctx) {
+    public UdpClientLbHandler(DefaultUpstreamContext ctx) {
         super(false);
         this.upstreamContext = ctx;
     }
@@ -41,6 +43,21 @@ public class UdpClientLbHandler extends SimpleChannelInboundHandler<DatagramPack
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket packet) throws Exception {
         final InetSocketAddress client = packet.sender();
+
+        Map<InetSocketAddress, AtomicLong> disallowedListedClients = upstreamContext.getDisallowedListedClients();
+
+        AtomicLong disallowedEndTime = disallowedListedClients.get(client);
+        if (disallowedEndTime != null) {
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - disallowedEndTime.get() >= upstreamContext.getConf().getConnections().getMaxDisallowedListDuration()) {
+                disallowedListedClients.remove(client);
+            } else {
+                disallowedEndTime.set(currentTime);
+                log.debug("[{}] Address is blacklisted!", client.getAddress());
+                return;
+            }
+        }
+
         ListenableFuture<ProxyChannel> proxyChannelFuture = upstreamContext.getOrCreateTargetChannel(client, 0);
         Futures.addCallback(proxyChannelFuture, new FutureCallback<>() {
             @Override
