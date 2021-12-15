@@ -60,7 +60,4 @@ public class IpUtil {
         return sb.toString();
     }
 
-    public static void main(String[] args) {
-        System.out.println(getCIDR("192.168.161.125", 24));
-    }
 }
