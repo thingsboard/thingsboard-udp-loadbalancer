@@ -32,5 +32,5 @@ public interface UpstreamContext {
 
     ExecutorService getExecutor();
 
-    Map<InetSocketAddress, AtomicLong> getDisallowedListedClients();
+    Map<InetSocketAddress, AtomicLong> getDisallowedClients();
 }

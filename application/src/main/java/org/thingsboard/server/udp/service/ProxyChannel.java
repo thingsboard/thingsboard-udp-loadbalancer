@@ -53,7 +53,7 @@ public class ProxyChannel {
     public void toTarget(DatagramPacket packet) {
         if (!rateLimits.tryConsume()) {
             log.info("[{}] Failed to send request. Max request limit reached", client.getAddress());
-            upstreamContext.getDisallowedListedClients().computeIfAbsent(client, c -> new AtomicLong()).set(System.currentTimeMillis());
+            upstreamContext.getDisallowedClients().computeIfAbsent(client, c -> new AtomicLong()).set(System.currentTimeMillis());
             return;
         }
 

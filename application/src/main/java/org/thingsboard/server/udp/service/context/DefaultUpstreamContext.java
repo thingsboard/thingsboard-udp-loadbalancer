@@ -69,7 +69,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
     private final Map<String, AtomicInteger> perSubnetConnectionsCounts;
 
     @Getter
-    private final Map<InetSocketAddress, AtomicLong> disallowedListedClients = new ConcurrentHashMap<>();
+    private final Map<InetSocketAddress, AtomicLong> disallowedClients = new ConcurrentHashMap<>();
 
     private LbContext context;
     @Getter
@@ -153,7 +153,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
                     resultFuture.set(createdChannel);
                 }
             } catch (LimitsException le) {
-                disallowedListedClients.computeIfAbsent(client, c -> new AtomicLong()).set(System.currentTimeMillis());
+                disallowedClients.computeIfAbsent(client, c -> new AtomicLong()).set(System.currentTimeMillis());
                 throw le;
             } finally {
                 channelRegisterLock.unlock();
@@ -272,7 +272,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
             connectionsCount.decrementAndGet();
             perIpConnectionsCounts.get(client.getHostName()).decrementAndGet();
             perSubnetConnectionsCounts.get(IpUtil.getCIDR(client.getHostName(), conf.getConnections().getCidrPrefix())).decrementAndGet();
-            disallowedListedClients.remove(client);
+            disallowedClients.remove(client);
         } finally {
             channelRegisterLock.unlock();
         }

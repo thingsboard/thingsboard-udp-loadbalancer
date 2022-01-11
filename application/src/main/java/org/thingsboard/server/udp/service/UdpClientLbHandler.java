@@ -44,16 +44,16 @@ public class UdpClientLbHandler extends SimpleChannelInboundHandler<DatagramPack
     protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket packet) throws Exception {
         final InetSocketAddress client = packet.sender();
 
-        Map<InetSocketAddress, AtomicLong> disallowedListedClients = upstreamContext.getDisallowedListedClients();
+        Map<InetSocketAddress, AtomicLong> disallowedClients = upstreamContext.getDisallowedClients();
 
-        AtomicLong disallowedEndTime = disallowedListedClients.get(client);
+        AtomicLong disallowedEndTime = disallowedClients.get(client);
         if (disallowedEndTime != null) {
             long currentTime = System.currentTimeMillis();
-            if (currentTime - disallowedEndTime.get() >= upstreamContext.getConf().getConnections().getMaxDisallowedListDuration()) {
-                disallowedListedClients.remove(client);
+            if (currentTime - disallowedEndTime.get() >= upstreamContext.getConf().getConnections().getMaxDisallowedDuration()) {
+                disallowedClients.remove(client);
             } else {
                 disallowedEndTime.set(currentTime);
-                log.debug("[{}] Address is blacklisted!", client.getAddress());
+                log.debug("[{}] The address is in the blocked list!", client.getAddress());
                 return;
             }
         }
