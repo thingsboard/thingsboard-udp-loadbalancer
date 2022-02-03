@@ -25,6 +25,7 @@ public class LbUpstreamConnectionProperties {
     private int cidrPrefix;
     private int perSubnetLimit;
     private long maxDisallowedDuration;
+    private String allowedAddresses;
     private int timeout;
     private int invalidateFrequency;
     private int logFrequency;

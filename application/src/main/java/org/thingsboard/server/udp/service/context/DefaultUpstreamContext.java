@@ -28,6 +28,7 @@ import io.netty.channel.socket.nio.NioDatagramChannel;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.util.StringUtils;
 import org.thingsboard.server.udp.conf.LbUpstreamProperties;
 import org.thingsboard.server.udp.service.ProxyChannel;
 import org.thingsboard.server.udp.service.UdpProxyLbHandler;
@@ -41,9 +42,11 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -67,6 +70,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
     private final AtomicInteger connectionsCount;
     private final Map<String, AtomicInteger> perIpConnectionsCounts;
     private final Map<String, AtomicInteger> perSubnetConnectionsCounts;
+    private final Set<String> allowedAddresses;
 
     @Getter
     private final Map<InetSocketAddress, AtomicLong> disallowedClients = new ConcurrentHashMap<>();
@@ -88,6 +92,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
         this.perIpConnectionsCounts = new HashMap<>();
         this.perSubnetConnectionsCounts = new HashMap<>();
         this.connectionsCount = new AtomicInteger(0);
+        this.allowedAddresses = new HashSet<>();
     }
 
     public void init(EventLoopGroup workerGroup, LbContext context) {
@@ -104,6 +109,15 @@ public class DefaultUpstreamContext implements UpstreamContext {
 
         context.getScheduler().scheduleWithFixedDelay(this::invalidateSessions, RND.nextInt(conf.getConnections().getInvalidateFrequency()), conf.getConnections().getInvalidateFrequency(), TimeUnit.SECONDS);
         context.getScheduler().scheduleWithFixedDelay(this::logSessions, RND.nextInt(conf.getConnections().getLogFrequency()), conf.getConnections().getLogFrequency(), TimeUnit.SECONDS);
+
+        if (!StringUtils.isEmpty(conf.getConnections().getAllowedAddresses())) {
+            for (String a : conf.getConnections().getAllowedAddresses().split(",")) {
+                String allowedAddress = a.trim();
+                if (!StringUtils.isEmpty(allowedAddress)) {
+                    allowedAddresses.add(allowedAddress);
+                }
+            }
+        }
     }
 
     private InetSocketAddress getNextServer(InetSocketAddress src, List<InetAddress> servers) throws Exception {
@@ -166,6 +180,10 @@ public class DefaultUpstreamContext implements UpstreamContext {
 
     private void checkLimits(InetSocketAddress client) {
         String hostAddress = client.getAddress().getHostAddress();
+
+        if (allowedAddresses.contains(hostAddress)) {
+            return;
+        }
 
         if (connectionsCount.get() >= conf.getConnections().getMax()) {
             throw new LimitsException("[" + hostAddress + "] Failed to create new session. Max limit of sessions reached!");
