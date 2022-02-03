@@ -20,32 +20,38 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.util.StringUtils;
 import org.thingsboard.server.udp.conf.LbUpstreamProperties;
 import org.thingsboard.server.udp.service.ProxyChannel;
 import org.thingsboard.server.udp.service.UdpProxyLbHandler;
 import org.thingsboard.server.udp.service.resolve.DnsUpdateEvent;
 import org.thingsboard.server.udp.service.resolve.Resolver;
 import org.thingsboard.server.udp.service.strategy.LbStrategy;
+import org.thingsboard.server.udp.util.IpUtil;
+import org.thingsboard.server.udp.util.LimitsException;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -55,10 +61,19 @@ public class DefaultUpstreamContext implements UpstreamContext {
     private static final Random RND = new Random();
 
     private final String name;
+    @Getter
     private final LbUpstreamProperties conf;
     private final Resolver resolver;
     private final LbStrategy strategy;
     private final Lock channelRegisterLock = new ReentrantLock();
+
+    private final AtomicInteger connectionsCount;
+    private final Map<String, AtomicInteger> perIpConnectionsCounts;
+    private final Map<String, AtomicInteger> perSubnetConnectionsCounts;
+    private final Set<String> allowedAddresses;
+
+    @Getter
+    private final Map<InetSocketAddress, AtomicLong> disallowedClients = new ConcurrentHashMap<>();
 
     private LbContext context;
     @Getter
@@ -74,6 +89,10 @@ public class DefaultUpstreamContext implements UpstreamContext {
         this.conf = conf;
         this.resolver = resolver;
         this.strategy = strategy;
+        this.perIpConnectionsCounts = new HashMap<>();
+        this.perSubnetConnectionsCounts = new HashMap<>();
+        this.connectionsCount = new AtomicInteger(0);
+        this.allowedAddresses = new HashSet<>();
     }
 
     public void init(EventLoopGroup workerGroup, LbContext context) {
@@ -90,6 +109,15 @@ public class DefaultUpstreamContext implements UpstreamContext {
 
         context.getScheduler().scheduleWithFixedDelay(this::invalidateSessions, RND.nextInt(conf.getConnections().getInvalidateFrequency()), conf.getConnections().getInvalidateFrequency(), TimeUnit.SECONDS);
         context.getScheduler().scheduleWithFixedDelay(this::logSessions, RND.nextInt(conf.getConnections().getLogFrequency()), conf.getConnections().getLogFrequency(), TimeUnit.SECONDS);
+
+        if (!StringUtils.isEmpty(conf.getConnections().getAllowedAddresses())) {
+            for (String a : conf.getConnections().getAllowedAddresses().split(",")) {
+                String allowedAddress = a.trim();
+                if (!StringUtils.isEmpty(allowedAddress)) {
+                    allowedAddresses.add(allowedAddress);
+                }
+            }
+        }
     }
 
     private InetSocketAddress getNextServer(InetSocketAddress src, List<InetAddress> servers) throws Exception {
@@ -127,9 +155,10 @@ public class DefaultUpstreamContext implements UpstreamContext {
                 if (existing != null) {
                     resultFuture.set(existing);
                 } else {
+                    checkLimits(client);
                     final Channel targetChannel = proxyBootstrap.bind(port).sync().channel();
                     int proxyPort = ((InetSocketAddress) targetChannel.localAddress()).getPort();
-                    ProxyChannel createdChannel = new ProxyChannel(clientChannel, targetChannel, client, target, proxyPort);
+                    ProxyChannel createdChannel = new ProxyChannel(clientChannel, targetChannel, client, target, proxyPort, conf.getRateLimits(), this);
                     clientsMap.put(client, createdChannel);
                     proxyPortMap.put(proxyPort, createdChannel);
                     if (log.isDebugEnabled()) {
@@ -137,6 +166,9 @@ public class DefaultUpstreamContext implements UpstreamContext {
                     }
                     resultFuture.set(createdChannel);
                 }
+            } catch (LimitsException le) {
+                disallowedClients.computeIfAbsent(client, c -> new AtomicLong()).set(System.currentTimeMillis());
+                throw le;
             } finally {
                 channelRegisterLock.unlock();
             }
@@ -144,6 +176,34 @@ public class DefaultUpstreamContext implements UpstreamContext {
             log.debug("Failed to create target channel ", e);
             resultFuture.setException(e);
         }
+    }
+
+    private void checkLimits(InetSocketAddress client) {
+        String hostAddress = client.getAddress().getHostAddress();
+
+        if (allowedAddresses.contains(hostAddress)) {
+            return;
+        }
+
+        if (connectionsCount.get() >= conf.getConnections().getMax()) {
+            throw new LimitsException("[" + hostAddress + "] Failed to create new session. Max limit of sessions reached!");
+        }
+
+        AtomicInteger perIpCount = perIpConnectionsCounts.computeIfAbsent(hostAddress, hn -> new AtomicInteger(0));
+
+        if (perIpCount.get() >= conf.getConnections().getPerIpLimit()) {
+            throw new LimitsException("[" + hostAddress + "] Failed to create new session. Max limit of sessions per ip reached!");
+        }
+
+        AtomicInteger perSubnetCount = perSubnetConnectionsCounts.computeIfAbsent(IpUtil.getCIDR(hostAddress, conf.getConnections().getCidrPrefix()), hn -> new AtomicInteger(0));
+
+        if (perSubnetCount.get() >= conf.getConnections().getPerSubnetLimit()) {
+            throw new LimitsException("[" + hostAddress + "] Failed to create new session. Max limit of sessions per subnet reached!");
+        }
+
+        connectionsCount.incrementAndGet();
+        perSubnetCount.incrementAndGet();
+        perIpCount.incrementAndGet();
     }
 
     @Override
@@ -224,8 +284,13 @@ public class DefaultUpstreamContext implements UpstreamContext {
     private void close(ProxyChannel proxy) throws InterruptedException {
         channelRegisterLock.lock();
         try {
-            clientsMap.remove(proxy.getClient());
+            InetSocketAddress client = proxy.getClient();
+            clientsMap.remove(client);
             proxyPortMap.remove(proxy.getProxyPort());
+            connectionsCount.decrementAndGet();
+            perIpConnectionsCounts.get(client.getHostName()).decrementAndGet();
+            perSubnetConnectionsCounts.get(IpUtil.getCIDR(client.getHostName(), conf.getConnections().getCidrPrefix())).decrementAndGet();
+            disallowedClients.remove(client);
         } finally {
             channelRegisterLock.unlock();
         }

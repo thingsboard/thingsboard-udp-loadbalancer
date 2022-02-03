@@ -51,9 +51,14 @@ lb:
       connections:
         max: "${COAP_UPSTREAM_CONNECTIONS_MAX:10000}"
         per-ip-limit: "${COAP_UPSTREAM_CONNECTIONS_IP_LIMIT:10}"
+        cidr_prefix: "${COAP_UPSTREAM_CONNECTIONS_CIDR_PREFIX:24}"
+        per-subnet-limit: "${COAP_UPSTREAM_CONNECTIONS_SUBNET_LIMIT:10}"
+        max_disallowed_duration: "${COAP_UPSTREAM_MAX_DISALLOWED_DURATION:60000}"
+        allowed_addresses: "${COAP_UPSTREAM_ALLOWED_ADDRESSES:}"
         timeout: "${COAP_UPSTREAM_CONNECTIONS_TIMEOUT_IN_SEC:900}"
         invalidate-frequency: "${COAP_UPSTREAM_CONNECTIONS_INVALIDATE_FREQUENCY_IN_SEC:10}"
         log-frequency: "${COAP_UPSTREAM_CONNECTIONS_LOG_FREQUENCY_IN_SEC:10}"
+      rate-limits: "${COAP_UPSTREAM_RATE_LIMITS:50:1,500:60}"
     - name: "${LWM2M_UPSTREAM_NAME:LwM2M}"
       bind-address: "${LWM2M_UPSTREAM_BIND_ADDRESS:0.0.0.0}"
       bind-port: "${LWM2M_UPSTREAM_BIND_PORT:5685}"
@@ -62,9 +67,14 @@ lb:
       connections:
         max: "${LWM2M_UPSTREAM_CONNECTIONS_MAX:10000}"
         per-ip-limit: "${LWM2M_UPSTREAM_CONNECTIONS_IP_LIMIT:10}"
+        cidr_prefix: "${LWM2M_UPSTREAM_CONNECTIONS_CIDR_PREFIX:24}"
+        per-subnet-limit: "${LWM2M_UPSTREAM_CONNECTIONS_SUBNET_LIMIT:10}"
+        max_disallowed_duration: "${LWM2M_UPSTREAM_MAX_DISALLOWED_DURATION:60000}"
+        allowed_addresses: "${LWM2M_UPSTREAM_ALLOWED_ADDRESSES:}"
         timeout: "${LWM2M_UPSTREAM_CONNECTIONS_TIMEOUT_IN_SEC:900}"
         invalidate-frequency: "${LWM2M_UPSTREAM_CONNECTIONS_INVALIDATE_FREQUENCY_IN_SEC:10}"
         log-frequency: "${LWM2M_UPSTREAM_CONNECTIONS_LOG_FREQUENCY_IN_SEC:10}"
+      rate-limits: "${LWM2M_UPSTREAM_RATE_LIMITS:50:1,500:60}"
   netty:
     worker_group_thread_count: "${LB_NETTY_WORKER_THREADS:4}"
     # One of DISABLED, SIMPLE, ADVANCED, PARANOID

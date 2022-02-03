@@ -20,8 +20,11 @@ import io.netty.channel.Channel;
 import io.netty.channel.socket.DatagramPacket;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.thingsboard.server.udp.service.context.UpstreamContext;
+import org.thingsboard.server.udp.util.TbRateLimits;
 
 import java.net.InetSocketAddress;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 @Data
@@ -33,17 +36,27 @@ public class ProxyChannel {
     private InetSocketAddress target;
     private final int proxyPort;
     private volatile long lastActivityTime;
+    private final TbRateLimits rateLimits;
+    private final UpstreamContext upstreamContext;
 
-    public ProxyChannel(Channel clientChannel, Channel targetChannel, InetSocketAddress client, InetSocketAddress target, int proxyPort) {
+    public ProxyChannel(Channel clientChannel, Channel targetChannel, InetSocketAddress client, InetSocketAddress target, int proxyPort, String limitsConfiguration, UpstreamContext upstreamContext) {
         this.clientChannel = clientChannel;
         this.targetChannel = targetChannel;
         this.client = client;
         this.target = target;
         this.proxyPort = proxyPort;
         this.lastActivityTime = System.currentTimeMillis();
+        this.rateLimits = new TbRateLimits(limitsConfiguration);
+        this.upstreamContext = upstreamContext;
     }
 
     public void toTarget(DatagramPacket packet) {
+        if (!rateLimits.tryConsume()) {
+            log.info("[{}] Failed to send request. Max request limit reached", client.getAddress());
+            upstreamContext.getDisallowedClients().computeIfAbsent(client, c -> new AtomicLong()).set(System.currentTimeMillis());
+            return;
+        }
+
         send(client, target, targetChannel, packet.content());
         lastActivityTime = System.currentTimeMillis();
     }

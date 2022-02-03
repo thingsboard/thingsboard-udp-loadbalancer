@@ -15,7 +15,6 @@
  */
 package org.thingsboard.server.udp.service;
 
-
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -25,16 +24,18 @@ import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.ReferenceCountUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.checkerframework.checker.nullness.qual.Nullable;
-import org.thingsboard.server.udp.service.context.UpstreamContext;
+import org.thingsboard.server.udp.service.context.DefaultUpstreamContext;
 
 import java.net.InetSocketAddress;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 public class UdpClientLbHandler extends SimpleChannelInboundHandler<DatagramPacket> {
 
-    private final UpstreamContext upstreamContext;
+    private final DefaultUpstreamContext upstreamContext;
 
-    public UdpClientLbHandler(UpstreamContext ctx) {
+    public UdpClientLbHandler(DefaultUpstreamContext ctx) {
         super(false);
         this.upstreamContext = ctx;
     }
@@ -42,6 +43,21 @@ public class UdpClientLbHandler extends SimpleChannelInboundHandler<DatagramPack
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket packet) throws Exception {
         final InetSocketAddress client = packet.sender();
+
+        Map<InetSocketAddress, AtomicLong> disallowedClients = upstreamContext.getDisallowedClients();
+
+        AtomicLong disallowedEndTime = disallowedClients.get(client);
+        if (disallowedEndTime != null) {
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - disallowedEndTime.get() >= upstreamContext.getConf().getConnections().getMaxDisallowedDuration()) {
+                disallowedClients.remove(client);
+            } else {
+                disallowedEndTime.set(currentTime);
+                log.debug("[{}] The address is in the blocked list!", client.getAddress());
+                return;
+            }
+        }
+
         ListenableFuture<ProxyChannel> proxyChannelFuture = upstreamContext.getOrCreateTargetChannel(client, 0);
         Futures.addCallback(proxyChannelFuture, new FutureCallback<>() {
             @Override
@@ -58,7 +74,7 @@ public class UdpClientLbHandler extends SimpleChannelInboundHandler<DatagramPack
             @Override
             public void onFailure(Throwable t) {
                 try {
-                    log.info("[{}][{}] Unexpected exception: ", client, t);
+                    log.info("[{}] Unexpected exception: ", client, t);
                 } finally {
                     ReferenceCountUtil.release(packet);
                 }
