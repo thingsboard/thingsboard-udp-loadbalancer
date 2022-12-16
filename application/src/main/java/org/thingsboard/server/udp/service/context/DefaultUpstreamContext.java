@@ -58,6 +58,8 @@ import java.util.concurrent.locks.ReentrantLock;
 @Slf4j
 public class DefaultUpstreamContext implements UpstreamContext {
 
+    private static final int MAX_DNS_UPDATE_RETRIES = 10;
+
     private static final Random RND = new Random();
 
     private final String name;
@@ -230,31 +232,41 @@ public class DefaultUpstreamContext implements UpstreamContext {
         log.info("[{}] Processing DNS update event: {}", name, dnsUpdateEvent);
         for (ProxyChannel proxy : clientsMap.values()) {
             if (dnsUpdateEvent.getRemovedAddresses().contains(proxy.getTarget().getAddress())) {
-                context.getExecutor().submit(() -> {
-                    try {
-                        InetSocketAddress oldTarget = proxy.getTarget();
-                        //Closing the old channel to free the port.
-                        proxy.getTargetChannel().close().sync();
-                        InetSocketAddress newTarget = getNextServer(proxy.getClient(), dnsUpdateEvent.getNewAddresses());
-                        if (newTarget != null) {
-                            //Open the new channel using same port.
-                            final Channel newTargetChannel = proxyBootstrap.bind(proxy.getProxyPort()).sync().channel();
-                            proxy.setTarget(newTarget);
-                            proxy.setTargetChannel(newTargetChannel);
-                            if (log.isDebugEnabled()) {
-                                log.debug("[{}][{}] Channel updated: [{}]->[{}] using: {}", name, proxy.getClient(), oldTarget, newTarget, newTargetChannel.localAddress());
-                            }
-                        } else {
-                            close(proxy);
-                            log.info("[{}][{}] Removed channel due to no valid target{}", name, proxy.getClient(), Instant.ofEpochMilli(proxy.getLastActivityTime()));
-                        }
-                    } catch (Exception e) {
-                        log.warn("[{}][{}] Failed to update target channel", name, proxy);
-                    }
-                });
+                context.getExecutor().submit(() -> doUpdate(dnsUpdateEvent, proxy, 0));
             }
         }
         log.info("[{}] Processed DNS update event: {}", name, dnsUpdateEvent);
+    }
+
+    private void doUpdate(DnsUpdateEvent dnsUpdateEvent, ProxyChannel proxy, int retry) {
+        try {
+            InetSocketAddress oldTarget = proxy.getTarget();
+            //Closing the old channel to free the port.
+            proxy.getTargetChannel().close().sync();
+            InetSocketAddress newTarget = getNextServer(proxy.getClient(), dnsUpdateEvent.getNewAddresses());
+            if (newTarget != null) {
+                //Open the new channel using same port.
+                final Channel newTargetChannel = proxyBootstrap.bind(proxy.getProxyPort()).sync().channel();
+                proxy.setTarget(newTarget);
+                proxy.setTargetChannel(newTargetChannel);
+                if (log.isDebugEnabled()) {
+                    log.debug("[{}][{}] Channel updated: [{}]->[{}] using: {}", name, proxy.getClient(), oldTarget, newTarget, newTargetChannel.localAddress());
+                }
+            } else {
+                close(proxy);
+                log.info("[{}][{}] Removed channel due to no valid target {}", name, proxy.getClient(), Instant.ofEpochMilli(proxy.getLastActivityTime()));
+            }
+        } catch (Exception e) {
+            if (retry < MAX_DNS_UPDATE_RETRIES) {
+                int finalRetry = retry + 1;
+                context.getScheduler().schedule(() -> {
+                            log.debug("[{}][{}] Try to update target channel", name, proxy);
+                            doUpdate(dnsUpdateEvent, proxy, finalRetry);
+                        }
+                        , finalRetry * 500L, TimeUnit.MILLISECONDS);
+            }
+            log.error("[{}][{}] Failed to update target channel", name, proxy, e);
+        }
     }
 
     private void invalidateSessions() {
