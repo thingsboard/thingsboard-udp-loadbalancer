@@ -16,6 +16,7 @@
 package org.thingsboard.server.udp.conf;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -24,6 +25,7 @@ import java.net.InetAddress;
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
+@Builder
 public class LbUpstreamProperties {
 
     private String name;
@@ -33,8 +35,18 @@ public class LbUpstreamProperties {
     private String targetAddress;
     private int targetPort;
     private LbUpstreamConnectionProperties connections;
+    private String rateLimits;
 
     public LbUpstreamProperties copy(InetAddress ip) {
-        return new LbUpstreamProperties(name + "-" + ip.getHostAddress(), ip.getHostAddress(), bindPort, bindSeparately, targetAddress, targetPort, connections);
+        return LbUpstreamProperties.builder()
+                .name(name + "-" + ip.getHostAddress())
+                .bindAddress(ip.getHostAddress())
+                .bindPort(bindPort)
+                .bindSeparately(bindSeparately)
+                .targetAddress(targetAddress)
+                .targetPort(targetPort)
+                .connections(connections)
+                .rateLimits(rateLimits)
+                .build();
     }
 }

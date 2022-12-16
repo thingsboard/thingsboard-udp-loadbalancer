@@ -13,21 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.thingsboard.server.udp.conf;
+package org.thingsboard.server.udp.util;
 
-import lombok.Data;
+public class LimitsException extends RuntimeException {
 
-@Data
-public class LbUpstreamConnectionProperties {
-
-    private int max;
-    private int perIpLimit;
-    private int cidrPrefix;
-    private int perSubnetLimit;
-    private long maxDisallowedDuration;
-    private String allowedAddresses;
-    private int timeout;
-    private int invalidateFrequency;
-    private int logFrequency;
-
+    public LimitsException(String message) {
+        super(message);
+    }
 }
