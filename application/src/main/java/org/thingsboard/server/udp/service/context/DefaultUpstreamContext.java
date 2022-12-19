@@ -242,7 +242,10 @@ public class DefaultUpstreamContext implements UpstreamContext {
         try {
             InetSocketAddress oldTarget = proxy.getTarget();
             //Closing the old channel to free the port.
-            proxy.getTargetChannel().close().sync();
+            Channel targetChannel = proxy.getTargetChannel();
+            if (targetChannel.isActive()) {
+                targetChannel.close().sync();
+            }
             InetSocketAddress newTarget = getNextServer(proxy.getClient(), dnsUpdateEvent.getNewAddresses());
             if (newTarget != null) {
                 //Open the new channel using same port.
