@@ -241,19 +241,11 @@ public class DefaultUpstreamContext implements UpstreamContext {
     private void doUpdate(DnsUpdateEvent dnsUpdateEvent, ProxyChannel proxy, int retry) {
         try {
             InetSocketAddress oldTarget = proxy.getTarget();
-            //Closing the old channel to free the port.
-            Channel targetChannel = proxy.getTargetChannel();
-            if (targetChannel.isActive()) {
-                targetChannel.close().sync();
-            }
             InetSocketAddress newTarget = getNextServer(proxy.getClient(), dnsUpdateEvent.getNewAddresses());
             if (newTarget != null) {
-                //Open the new channel using same port.
-                final Channel newTargetChannel = proxyBootstrap.bind(proxy.getProxyPort()).sync().channel();
                 proxy.setTarget(newTarget);
-                proxy.setTargetChannel(newTargetChannel);
                 if (log.isDebugEnabled()) {
-                    log.debug("[{}][{}] Channel updated: [{}]->[{}] using: {}", name, proxy.getClient(), oldTarget, newTarget, newTargetChannel.localAddress());
+                    log.debug("[{}][{}] Channel updated: [{}]->[{}] using: {}", name, proxy.getClient(), oldTarget, newTarget, proxy.getTargetChannel().localAddress());
                 }
             } else {
                 close(proxy);
