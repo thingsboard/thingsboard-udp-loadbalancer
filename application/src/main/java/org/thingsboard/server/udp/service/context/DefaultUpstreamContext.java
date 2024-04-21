@@ -184,7 +184,7 @@ public class DefaultUpstreamContext implements UpstreamContext {
                             log.info("[{}][{}] Removed channel due to no valid target{}", name, proxy.getClient(), Instant.ofEpochMilli(proxy.getLastActivityTime()));
                         }
                     } catch (Exception e) {
-                        log.warn("[{}][{}] Failed to update target channel", name, proxy);
+                        log.warn("[{}][{}] Failed to update target channel", name, proxy, e);
                     }
                 });
             }
